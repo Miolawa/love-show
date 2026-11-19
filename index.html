@@ -1,0 +1,498 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#ffdbe7">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath fill='%23e01b64' d='M12 21s-7.5-4.6-9.7-9.1C.6 8.3 2.7 4.5 6.4 4.5c2 0 3.8 1.2 4.6 2.9h2c.8-1.7 2.6-2.9 4.6-2.9 3.7 0 5.8 3.8 4.1 7.4C19.5 16.4 12 21 12 21z'/%3E%3C/svg%3E">
+<title>老大最好了！！！</title>
+<style>
+  :root{ --pink:#c2185b; --border:#f8bbd0; }
+  *{ box-sizing:border-box; }
+  html,body{ height:100%; margin:0; }
+  body{
+    font-family:"Microsoft YaHei","PingFang SC","Noto Sans SC","Noto Sans CJK SC",sans-serif;
+    background:radial-gradient(circle at 50% 38%, #ffffff 0%, #ffeef4 48%, #ffdbe7 100%);
+    overflow:hidden;
+    -webkit-tap-highlight-color:transparent;
+    user-select:none;
+  }
+  #stage{ position:fixed; inset:0; pointer-events:none; }
+
+  .popup{
+    position:fixed; left:0; top:0;
+    display:flex; align-items:center; justify-content:center;
+    padding:3px 5px; text-align:center; white-space:pre-line; line-height:1.3;
+    color:var(--pink); background:#fff6f9;
+    border:1px solid var(--border); border-radius:5px;
+    box-shadow:0 6px 16px rgba(194,24,91,.12);
+    opacity:0; transform:scale(.55);
+    transition:opacity .18s ease, transform .18s cubic-bezier(.2,1.5,.5,1);
+    will-change:opacity,transform;
+  }
+  .popup.show{ opacity:1; transform:scale(1); }
+
+  #hud{
+    position:fixed; inset:0; z-index:10;
+    display:flex; flex-direction:column; align-items:center; justify-content:center;
+    gap:16px; padding:24px; text-align:center;
+    transition:opacity .45s ease, transform .45s ease;
+  }
+  #hud.hidden{ opacity:0; transform:translateY(-8px); pointer-events:none; }
+  #hud .heart{
+    font-size:34px; line-height:1; color:#ff5d8f;
+    animation:beat 1.6s ease-in-out infinite;
+  }
+  @keyframes beat{ 0%,100%{ transform:scale(1); } 50%{ transform:scale(1.16); } }
+  h1{
+    margin:0; font-size:clamp(26px,5.6vw,54px); letter-spacing:.06em;
+    color:#c2185b; text-shadow:0 4px 18px rgba(194,24,91,.15);
+  }
+  #hud p{ margin:0; color:#9a6f80; font-size:clamp(13px,1.5vw,16px); line-height:1.8; }
+  #hud .tip{ font-size:12px; color:#c39aa9; margin-top:6px; }
+
+  #startBtn{
+    appearance:none; border:0; cursor:pointer; font-family:inherit;
+    padding:12px 46px; border-radius:999px;
+    font-size:clamp(15px,2vw,18px); letter-spacing:.32em; text-indent:.32em; color:#fff;
+    background:linear-gradient(135deg,#ff6fa5,#e01b64 60%,#c2185b);
+    box-shadow:0 10px 26px rgba(224,27,100,.32), inset 0 1px 0 rgba(255,255,255,.35);
+    transition:transform .15s ease, box-shadow .15s ease;
+  }
+  #startBtn:hover{ transform:translateY(-1px); box-shadow:0 14px 30px rgba(224,27,100,.38); }
+  #startBtn:active{ transform:translateY(1px) scale(.99); }
+
+  #stopBtn{
+    position:fixed; top:12px; right:14px; z-index:20;
+    width:36px; height:36px; border-radius:50%;
+    border:1px solid var(--border); background:rgba(255,255,255,.82);
+    color:#c2185b; font-size:14px; cursor:pointer; display:none;
+    align-items:center; justify-content:center;
+    box-shadow:0 2px 10px rgba(194,24,91,.12);
+  }
+  #stopBtn.on{ display:flex; }
+</style>
+</head>
+<body>
+<div id="stage"></div>
+
+<div id="hud">
+  <div class="heart">♥</div>
+  <h1>老大最好了！！！</h1>
+  <p id="hudSub">点一下按钮，屏幕会依次绽放：心形 → 满屏关心 → LOVE</p>
+  <button id="startBtn">开始</button>
+  <p class="tip">手机直接竖屏观看即可 · 电脑建议按 F11 全屏 · 按 Esc 随时结束</p>
+</div>
+
+<button id="stopBtn" title="结束（Esc）" aria-label="结束">✕</button>
+
+<script>
+(function () {
+  'use strict';
+
+  var stage = document.getElementById('stage');
+  var hud = document.getElementById('hud');
+  var hudSub = document.getElementById('hudSub');
+  var startBtn = document.getElementById('startBtn');
+  var stopBtn = document.getElementById('stopBtn');
+
+  /* ---------------- 关心语录 ---------------- */
+  var QUOTES = [
+    "天凉了，多穿衣服",
+    "照顾好自己，别让我担心",
+    "别熬夜，早点睡",
+    "记得按时吃饭，别凑合",
+    "多喝热水，别贪凉",
+    "路上小心，注意安全",
+    "今天也要开开心心",
+    "累了就歇一会儿，别硬撑",
+    "别硬撑，有事叫我",
+    "天冷了，记得加外套",
+    "早晚温差大，出门带件外套",
+    "你笑起来最好看",
+    "想你啦，老大",
+    "风大，围巾记得戴上",
+    "别总熬夜，眼睛会疼",
+    "工作再忙，也要好好吃饭",
+    "下雨记得带伞",
+    "难受了就说，别自己扛",
+    "你值得被好好对待",
+    "慢慢来，一切都会好的",
+    "早点休息，做个好梦",
+    "多穿点，别着凉了",
+    "别太累，身体最重要",
+    "记得喝水，别等渴了",
+    "降温了，被子换厚一点",
+    "心情不好就找我聊聊",
+    "晚安，老大"
+  ];
+
+  var SHORT_QUOTES = [
+    "天凉加衣", "照顾好自己", "早点睡", "多喝热水", "记得吃饭", "别太累",
+    "注意保暖", "想你了", "有我在", "开心一点", "慢慢来", "乖一点"
+  ];
+
+  /* 屏幕很窄（手机竖屏）时 LOVE 的格子太小，改用两字短句 */
+  var TINY_QUOTES = [
+    "想你", "抱抱", "乖", "晚安", "早安", "在呢",
+    "开心", "保重", "慢点", "等你", "加油", "别累"
+  ];
+
+  /* ---------------- 节奏参数（想快一点 / 慢一点就改这里） ---------------- */
+  var CFG = {
+    HEART_COUNT: 60,        // 心形上分布的弹窗数量
+    HEART_STEP_MS: 95,      // 心形阶段相邻弹窗的间隔
+    HEART_HOLD_MS: 1100,    // 心形完整后的停留时间
+    RANDOM_COUNT: 96,       // 随机阶段的弹窗数量
+    RANDOM_STEP_MS: 45,     // 随机阶段弹出间隔
+    RANDOM_HOLD_MS: 900,    // 随机铺满后的停留时间
+    LOVE_STEP_MS: 70,       // LOVE 阶段相邻弹窗间隔
+    LOVE_LETTER_GAP_MS: 220,// 两个字母之间的停顿
+    LOVE_HOLD_MS: 6000,     // LOVE 完成后停留多久再结束
+    BIG_W: 168, BIG_H: 72
+  };
+
+  /* 5 行 x 3 列的方块字体 */
+  var LETTERS = {
+    L: ["#..", "#..", "#..", "#..", "###"],
+    O: ["###", "#.#", "#.#", "#.#", "###"],
+    V: ["#.#", "#.#", "#.#", "#.#", ".#."],
+    E: ["###", "#..", "###", "#..", "###"]
+  };
+
+  function sleep(ms) { return new Promise(function (r) { setTimeout(r, ms); }); }
+
+  function pick(arr) { return arr[Math.floor(Math.random() * arr.length)]; }
+
+  function shuffle(arr) {
+    for (var i = arr.length - 1; i > 0; i--) {
+      var j = Math.floor(Math.random() * (i + 1));
+      var t = arr[i]; arr[i] = arr[j]; arr[j] = t;
+    }
+    return arr;
+  }
+
+  /* 多数时候一条语录，偶尔叠成两行 */
+  function pickText() {
+    if (Math.random() < 0.3) {
+      var short = QUOTES.filter(function (q) { return q.length <= 8; });
+      var i = Math.floor(Math.random() * short.length);
+      var j = Math.floor(Math.random() * (short.length - 1));
+      if (j >= i) j++;
+      return short[i] + "\n" + short[j];
+    }
+    return pick(QUOTES);
+  }
+
+  /* ---------------- 布局计算 ---------------- */
+
+  function heartPoints(count, cx, cy, boxW, boxH) {
+    var samples = 4000;
+    var raw = [];
+    for (var i = 0; i < samples; i++) {
+      var t = 2 * Math.PI * i / samples;
+      var s = Math.sin(t);
+      var x = 16 * s * s * s;
+      var y = 13 * Math.cos(t) - 5 * Math.cos(2 * t) - 2 * Math.cos(3 * t) - Math.cos(4 * t);
+      raw.push([x, y]);
+    }
+    var minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+    for (var k = 0; k < raw.length; k++) {
+      if (raw[k][0] < minX) minX = raw[k][0];
+      if (raw[k][0] > maxX) maxX = raw[k][0];
+      if (raw[k][1] < minY) minY = raw[k][1];
+      if (raw[k][1] > maxY) maxY = raw[k][1];
+    }
+    var spanX = (maxX - minX) || 1, spanY = (maxY - minY) || 1;
+    var scale = Math.min(boxW / spanX, boxH / spanY);
+    var midX = (minX + maxX) / 2, midY = (minY + maxY) / 2;
+
+    /* 按累计弧长重采样，让弹窗沿轮廓均匀铺开 */
+    var accum = [0];
+    for (var p = 1; p < samples; p++) {
+      accum.push(accum[p - 1] + Math.hypot(raw[p][0] - raw[p - 1][0], raw[p][1] - raw[p - 1][1]));
+    }
+    var total = accum[samples - 1];
+    var pts = [], j = 0;
+    for (var n = 0; n < count; n++) {
+      var target = total * n / count;
+      while (j < samples - 1 && accum[j] < target) j++;
+      pts.push([(raw[j][0] - midX) * scale + cx, cy - (raw[j][1] - midY) * scale]);
+    }
+    return pts;
+  }
+
+  function randomPoints(count, W, H) {
+    var cols = Math.max(1, Math.round(Math.sqrt(count * W / H)));
+    var rows = Math.ceil(count / cols);
+    var cellW = W / cols, cellH = H / rows;
+    var cells = [];
+    for (var r = 0; r < rows; r++) for (var c = 0; c < cols; c++) cells.push([c, r]);
+    shuffle(cells);
+
+    var halfW = CFG.BIG_W / 2, halfH = CFG.BIG_H / 2;
+    var pts = [];
+    for (var i = 0; i < Math.min(count, cells.length); i++) {
+      var ccx = (cells[i][0] + 0.5) * cellW, ccy = (cells[i][1] + 0.5) * cellH;
+      var jx = Math.max(0, (cellW - CFG.BIG_W) / 2), jy = Math.max(0, (cellH - CFG.BIG_H) / 2);
+      var x = ccx + (Math.random() * 2 - 1) * jx;
+      var y = ccy + (Math.random() * 2 - 1) * jy;
+      x = Math.min(Math.max(x, halfW), W - halfW);
+      y = Math.min(Math.max(y, halfH + 10), H - halfH - 20);
+      pts.push([x, y]);
+    }
+    return pts;
+  }
+
+  function loveLayout(W, H, cellW, cellH, winW, winH, gapCells) {
+    var letterCols = 3;
+    var chars = ['L', 'O', 'V', 'E'];
+    var offsets = chars.map(function (ch, i) { return [ch, i * (letterCols + gapCells)]; });
+    var intervals = offsets[3][1] + (letterCols - 1);
+    var totalW = intervals * cellW + winW;
+    var totalH = 4 * cellH + winH;
+    var x0 = (W - totalW) / 2;
+    var y0 = (H - totalH) / 2 - H * 0.02;
+
+    var cells = [];
+    offsets.forEach(function (item, idx) {
+      var ch = item[0], base = item[1];
+      LETTERS[ch].forEach(function (row, r) {
+        for (var c = 0; c < row.length; c++) {
+          if (row.charAt(c) === '#') {
+            cells.push([
+              x0 + (base + c) * cellW + winW / 2,
+              y0 + r * cellH + winH / 2,
+              idx
+            ]);
+          }
+        }
+      });
+    });
+    return cells;
+  }
+
+  /* ---------------- 单个弹窗 ---------------- */
+  function Popup(w, h, fontPx) {
+    this.w = w;
+    this.h = h;
+    var el = document.createElement('div');
+    el.className = 'popup';
+    el.style.width = w + 'px';
+    el.style.height = h + 'px';
+    el.style.fontSize = fontPx + 'px';
+    this.el = el;
+    stage.appendChild(el);
+  }
+
+  Popup.prototype.showAt = function (cx, cy, text) {
+    var W = window.innerWidth, H = window.innerHeight;
+    var x = Math.round(cx - this.w / 2);
+    var y = Math.round(cy - this.h / 2);
+    x = Math.max(0, Math.min(x, W - this.w));
+    y = Math.max(0, Math.min(y, H - this.h - 6));
+
+    var el = this.el;
+    el.textContent = text;
+    el.style.left = x + 'px';
+    el.style.top = y + 'px';
+    el.classList.remove('show');
+    void el.offsetWidth;           /* 强制回流，让每个弹窗都重新“弹”一次 */
+    el.classList.add('show');
+  };
+
+  Popup.prototype.hide = function () {
+    this.el.classList.remove('show');
+  };
+
+  Popup.prototype.remove = function () {
+    if (this.el.parentNode) this.el.parentNode.removeChild(this.el);
+  };
+
+  /* ---------------- 动画主体 ---------------- */
+  var show = {
+    big: [],
+    small: [],
+    runId: 0,
+
+    isAlive: function (id) { return id === this.runId; },
+
+    clearAll: function () {
+      for (var i = 0; i < this.big.length; i++) this.big[i].hide();
+      for (var j = 0; j < this.small.length; j++) this.small[j].hide();
+    },
+
+    resetPools: function () {
+      for (var i = 0; i < this.big.length; i++) this.big[i].remove();
+      for (var j = 0; j < this.small.length; j++) this.small[j].remove();
+      this.big = [];
+      this.small = [];
+    },
+
+    /* 小屏（手机）自动缩小弹窗、减少数量 */
+    scaleParams: function () {
+      var W = window.innerWidth;
+      var small = W < 620;
+      var bigW = Math.round(Math.max(96, Math.min(CFG.BIG_W, W * (small ? 0.28 : 0.34))));
+      CFG.BIG_W = bigW;
+      CFG.BIG_H = Math.round(bigW * (72 / 168));
+      CFG.HEART_COUNT = small ? 44 : 60;
+      CFG.RANDOM_COUNT = small ? 56 : 96;
+      this.bigFont = Math.max(10, Math.min(13.5, bigW * 0.09));
+    },
+
+    start: function () {
+      var self = this;
+      var id = ++this.runId;
+      hud.classList.add('hidden');
+      stopBtn.classList.add('on');
+      this.resetPools();
+      this.scaleParams();
+      sleep(250).then(function () {
+        if (!self.isAlive(id)) return;
+        return self.heartPhase(id);
+      }).then(function () {
+        if (!self.isAlive(id)) return;
+        return self.randomPhase(id);
+      }).then(function () {
+        if (!self.isAlive(id)) return;
+        return self.lovePhase(id);
+      }).then(function () {
+        if (!self.isAlive(id)) return;
+        return sleep(CFG.LOVE_HOLD_MS);
+      }).then(function () {
+        if (!self.isAlive(id)) return;
+        self.finish();
+      });
+    },
+
+    heartPhase: function (id) {
+      var self = this;
+      var W = window.innerWidth, H = window.innerHeight;
+      var small = W < 620;
+      var boxW = small ? W * 0.88 : Math.min(W * 0.60, 1080);
+      var boxH = small ? H * 0.58 : Math.min(H * 0.70, 800);
+      var pts = heartPoints(CFG.HEART_COUNT, W / 2, H / 2 - 10, boxW, boxH);
+
+      var need = Math.max(CFG.HEART_COUNT, CFG.RANDOM_COUNT);
+      for (var n = 0; n < need; n++) {
+        this.big.push(new Popup(CFG.BIG_W, CFG.BIG_H, this.bigFont));
+      }
+
+      /* 心形要一口气铺完，再停留一会儿 */
+      return new Promise(function (done) {
+        var i = 0;
+        function step() {
+          if (!self.isAlive(id)) { done(); return; }
+          if (i >= pts.length) {
+            sleep(CFG.HEART_HOLD_MS).then(function () {
+              if (!self.isAlive(id)) { done(); return; }
+              for (var k = 0; k < self.big.length; k++) self.big[k].hide();
+              sleep(450).then(done);
+            });
+            return;
+          }
+          self.big[i % self.big.length].showAt(pts[i][0], pts[i][1], pickText());
+          i++;
+          sleep(CFG.HEART_STEP_MS).then(step);
+        }
+        step();
+      });
+    },
+
+    randomPhase: function (id) {
+      var self = this;
+      var W = window.innerWidth, H = window.innerHeight;
+      var pts = randomPoints(CFG.RANDOM_COUNT, W, H);
+      return new Promise(function (done) {
+        var i = 0;
+        function step() {
+          if (!self.isAlive(id)) { done(); return; }
+          if (i >= pts.length) {
+            sleep(CFG.RANDOM_HOLD_MS).then(function () {
+              if (!self.isAlive(id)) { done(); return; }
+              for (var k = 0; k < self.big.length; k++) self.big[k].hide();
+              sleep(500).then(done);
+            });
+            return;
+          }
+          self.big[i % self.big.length].showAt(pts[i][0], pts[i][1], pickText());
+          i++;
+          sleep(CFG.RANDOM_STEP_MS).then(step);
+        }
+        step();
+      });
+    },
+
+    lovePhase: function (id) {
+      var self = this;
+      var W = window.innerWidth, H = window.innerHeight;
+      var gap = 0.35;
+      /* 让 LOVE 四个字母正好铺满屏宽（winW = cellW + 4） */
+      var cellW = Math.floor((W * 0.96 - 8) / (12.05 + 1));
+      cellW = Math.max(24, Math.min(cellW, 240));
+      var cellH = Math.max(20, Math.round(cellW * 0.62));
+      var winW = cellW + 4, winH = cellH + 6;
+      var fontPx = Math.max(9, Math.min(13, Math.round(Math.floor(cellW / 13) * 1.33)));
+      var tinyScreen = winW < 60;
+      var cells = loveLayout(W, H, cellW, cellH, winW, winH, gap);
+
+      for (var n = 0; n < cells.length; n++) {
+        this.small.push(new Popup(winW, winH, fontPx));
+      }
+
+      return new Promise(function (done) {
+        var i = 0, lastLetter = -1;
+        function step() {
+          if (!self.isAlive(id)) { done(); return; }
+          if (i >= cells.length) {
+            sleep(CFG.LOVE_HOLD_MS).then(function () {
+              for (var k = 0; k < self.small.length; k++) self.small[k].hide();
+              sleep(300).then(done);
+            });
+            return;
+          }
+          var c = cells[i];
+          self.small[i].showAt(c[0], c[1], pick(tinyScreen ? TINY_QUOTES : SHORT_QUOTES));
+          var delay = CFG.LOVE_STEP_MS;
+          if (c[2] !== lastLetter) { lastLetter = c[2]; delay = CFG.LOVE_LETTER_GAP_MS; }
+          i++;
+          sleep(delay).then(step);
+        }
+        step();
+      });
+    },
+
+    finish: function () {
+      this.clearAll();
+      stopBtn.classList.remove('on');
+      hud.classList.remove('hidden');
+      startBtn.textContent = '再放一次';
+      hudSub.textContent = '动画结束啦 —— 想再看一次就再点一下';
+    },
+
+    stop: function () {
+      this.runId++;
+      this.finish();
+    }
+  };
+
+  startBtn.addEventListener('click', function () { show.start(); });
+  stopBtn.addEventListener('click', function () { show.stop(); });
+
+  document.addEventListener('keydown', function (e) {
+    if (e.key === 'Escape') show.stop();
+  });
+
+  /* 分享链接带上 ?auto=1，别人打开就直接开始 */
+  var auto = /(^|[?&])auto=1(&|$)/.test(window.location.search);
+  if (auto) {
+    setTimeout(function () { show.start(); }, 400);
+  }
+
+  window.loveShow = show;
+  window.loveCFG = CFG;
+})();
+</script>
+</body>
+</html>
